@@ -26,8 +26,15 @@ class AttODEblock(ODEblock):
     self.test_integrator = odeint
     self.set_tol()
     # parameter trading off between attention and the Laplacian
-    self.multihead_att_layer = SpGraphTransAttentionLayer(opt['hidden_dim'], opt['hidden_dim'], opt,
-                                                          device, edge_weights=self.odefunc.edge_weight).to(device)
+    attention_list = []
+    for _ in range(int(self.t[-1])):
+    # for _ in range(1):
+      multihead_att_layer = SpGraphTransAttentionLayer(opt['hidden_dim'], opt['hidden_dim'], opt,
+                                                      device, edge_weights=self.odefunc.edge_weight).to(device)
+      attention_list.append(multihead_att_layer)
+    self.multihead_att_layer = torch.nn.ModuleList(attention_list)           
+    # self.multihead_att_layer = SpGraphTransAttentionLayer(opt['hidden_dim'], opt['hidden_dim'], opt,
+    #                                                       device, edge_weights=self.odefunc.edge_weight).to(device)
 
   def get_attention_weights(self, x):
     attention, values = self.multihead_att_layer(x, self.odefunc.edge_index)
@@ -35,8 +42,9 @@ class AttODEblock(ODEblock):
 
   def forward(self, x):
     t = self.t.type_as(x)
-    self.odefunc.attention_weights = self.get_attention_weights(x)
-    self.reg_odefunc.odefunc.attention_weights = self.odefunc.attention_weights
+    # self.odefunc.attention_weights = self.get_attention_weights(x)
+    self.odefunc.attention_weights = self.multihead_att_layer
+    # self.reg_odefunc.odefunc.attention_weights = self.odefunc.attention_weights
     integrator = self.train_integrator if self.training else self.test_integrator
 
     reg_states = tuple(torch.zeros(x.size(0)).to(x) for i in range(self.nreg))

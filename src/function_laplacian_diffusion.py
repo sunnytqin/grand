@@ -20,8 +20,8 @@ class LaplacianODEFunc(ODEFunc):
 
     self.in_features = in_features
     self.out_features = out_features
-    self.w = nn.Parameter(torch.eye(opt['hidden_dim']))
-    self.d = nn.Parameter(torch.zeros(opt['hidden_dim']) + 1)
+    # self.w = nn.Parameter(torch.eye(opt['hidden_dim']))
+    # self.d = nn.Parameter(torch.zeros(opt['hidden_dim']) + 1)
     self.alpha_sc = nn.Parameter(torch.ones(1))
     self.beta_sc = nn.Parameter(torch.ones(1))
 
@@ -35,11 +35,26 @@ class LaplacianODEFunc(ODEFunc):
       ax = torch_sparse.spmm(self.edge_index, self.edge_weight, x.shape[0], x.shape[0], x)
     return ax
 
+  def sparse_multiply_t(self, t, x):
+    if self.opt['block'] in ['attention']:  # adj is a multihead attention
+      idx = min(max(int(t)-1, 0), len(self.attention_weights)-1)
+      # idx=0
+      mean_attention, _ = self.attention_weights[idx](x, self.edge_index)
+      # mean_attention = self.attention_weights.mean(dim=1)
+      ax = torch_sparse.spmm(self.edge_index, mean_attention.squeeze(), x.shape[0], x.shape[0], x)
+    elif self.opt['block'] in ['mixed', 'hard_attention']:  # adj is a torch sparse matrix
+      ax = torch_sparse.spmm(self.edge_index, self.attention_weights, x.shape[0], x.shape[0], x)
+    else:  # adj is a torch sparse matrix
+      idx = max(int(t)-1, 0)
+      ax = torch_sparse.spmm(self.edge_index, self.edge_weight[idx], x.shape[0], x.shape[0], x)
+    return ax
+
   def forward(self, t, x):  # the t param is needed by the ODE solver.
-    if self.nfe > self.opt["max_nfe"]:
-      raise MaxNFEException
+    # if self.nfe > self.opt["max_nfe"]:
+    #   raise MaxNFEException
     self.nfe += 1
-    ax = self.sparse_multiply(x)
+    ax = self.sparse_multiply_t(t, x)
+    # ax = self.sparse_multiply(x)
     if not self.opt['no_alpha_sigmoid']:
       alpha = torch.sigmoid(self.alpha_train)
     else:

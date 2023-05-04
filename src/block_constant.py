@@ -20,7 +20,8 @@ class ConstantODEblock(ODEblock):
                                            num_nodes=data.num_nodes,
                                            dtype=data.x.dtype)
     self.odefunc.edge_index = edge_index.to(device)
-    self.odefunc.edge_weight = edge_weight.to(device)
+    edge_weight_dependent = edge_weight[None, :].repeat(5, 1)
+    self.odefunc.edge_weight = torch.nn.Parameter(edge_weight_dependent.to(device), requires_grad=False)
     self.reg_odefunc.odefunc.edge_index, self.reg_odefunc.odefunc.edge_weight = self.odefunc.edge_index, self.odefunc.edge_weight
 
     if opt['adjoint']:
